@@ -1,0 +1,41 @@
+name: Deploy Laravel to VPS
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Deploy to VPS via SSH
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_KEY }}
+          script: |
+            cd /home/nusantaratama/dev-auropay-api.nusantaratama.com/html
+            git config --global --add safe.directory /home/nusantaratama/dev-auropay-api.nusantaratama.com/html
+            git checkout dev
+            git restore .
+            git pull origin dev
+
+            # Jalankan semua command dalam container PHP
+            docker compose exec --user=root dev-auropay-api-php bash -c "
+              git config --global --add safe.directory /var/www/html
+              composer install --no-interaction --no-dev --prefer-dist --optimize-autoloader &&
+              npm install
+              php artisan optimize:clear
+              php artisan config:cache &&
+              php artisan route:cache &&
+              php artisan view:cache &&
+              php artisan storage:link &&
+              chown -R www:www /var/www/html
+              chmod -R 775 /var/www/html
+            "
